@@ -1,0 +1,38 @@
+{
+  "name": "ProblemUpdate",
+  "type": "object",
+  "properties": {
+    "problem_id": {
+      "type": "string",
+      "description": "Reference to Problem id"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Submitted",
+        "Verified",
+        "Assigned",
+        "In Progress",
+        "Resolved",
+        "Closed"
+      ]
+    },
+    "comment": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "author_id": {
+      "type": "string",
+      "description": "User id of the comment/update author"
+    },
+    "author_name": {
+      "type": "string",
+      "description": "Display name of the comment/update author"
+    }
+  },
+  "required": [
+    "problem_id"
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "name": "Problem",
+  "type": "object",
+  "properties": {
+    "problem_id": {
+      "type": "string",
+      "description": "Unique display ID e.g. PRB-XXXXXX"
+    },
+    "title": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Road Damage",
+        "Pothole",
+        "Garbage",
+        "Streetlight",
+        "Water Leakage",
+        "Drainage",
+        "Traffic",
+        "Public Infrastructure",
+        "Environment",
+        "Other"
+      ],
+      "default": "Other"
+    },
+    "description": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "Uploaded geo-tagged problem photo URL"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "GPS latitude captured at report time"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "GPS longitude captured at report time"
+    },
+    "geo_timestamp": {
+      "type": "string",
+      "description": "ISO timestamp of when GPS coordinates were captured"
+    },
+    "address": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Submitted",
+        "Verified",
+        "Assigned",
+        "In Progress",
+        "Resolved",
+        "Closed"
+      ],
+      "default": "Submitted"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Urgent"
+      ],
+      "default": "Medium"
+    },
+    "department": {
+      "type": "string",
+      "description": "Assigned department name"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Assigned worker name"
+    },
+    "resolution_image_url": {
+      "type": "string"
+    },
+    "confirmations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of users who confirmed they face this problem too"
+    }
+  },
+  "required": [
+    "title",
+    "category",
+    "description"
+  ]
+}
