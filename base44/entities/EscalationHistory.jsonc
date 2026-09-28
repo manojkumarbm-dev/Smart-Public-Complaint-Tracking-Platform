@@ -1,0 +1,38 @@
+{
+  "name": "EscalationHistory",
+  "type": "object",
+  "properties": {
+    "complaint_id": {
+      "type": "string"
+    },
+    "previous_authority": {
+      "type": "string"
+    },
+    "new_authority": {
+      "type": "string"
+    },
+    "previous_stage": {
+      "type": "string"
+    },
+    "new_stage": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "escalated_at": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "notification_status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "complaint_id",
+    "new_stage",
+    "escalated_at"
+  ]
+}

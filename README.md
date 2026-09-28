@@ -19,6 +19,7 @@ The Smart Public Complaint Tracking Platform helps communities capture local pro
 - Complaint tracking dashboard for citizens
 - Admin dashboard with users, complaints, map view, and analytics
 - Status updates, comments, notifications, and department assignment
+- Admin-configurable stage timelines with deadline tracking and escalation history
 - Image preview and local file upload simulation
 - Fully local runtime without Base44 or external backend requirements
 
@@ -114,6 +115,30 @@ src/
 3. Report a complaint with a photo and location.
 4. Track the complaint in the citizen dashboard.
 5. Log in as admin to review, assign, and resolve issues.
+
+## Configurable Complaint Timelines
+
+Administrators can edit each stage's allowed duration and enable or disable stages in **Admin Dashboard → Timeline Management**. The dashboard also configures the higher-authority contact. A stage's deadline is calculated when a complaint enters that stage; subsequent settings changes apply when complaints next enter a stage. The complaint detail page shows stage start dates, allowed durations, deadlines, remaining time, completion state, and escalation details.
+
+Overdue stages are marked separately from the complaint's operational status. The existing escalation history and notification flow records the escalation and alerts citizens and authorities. Disabled stages do not receive deadlines. Default values are starter settings only and can be changed by an administrator.
+
+### Complaint completion and archive
+
+`Resolved` is not a terminal completion state. An administrator must set the complaint to `Completed` after every workflow stage has a completed history entry and no pending action remains. The data layer rejects incomplete completion requests and moves valid records from the active complaints collection into a retained completed archive. Related comments/status updates, notifications, escalation history, and attachment references are preserved. Active dashboards and queues exclude archived complaints; citizens and administrators can still open completed records and see the completion confirmation.
+
+This repository is currently a standalone local demo with no server-side API or database. Timeline settings and complaint records use the existing browser localStorage-backed data layer and survive refreshes in that browser; they are not shared across devices and are not protected by server-side authorization. The completion guard runs at this application data-layer boundary, but a production deployment still needs a real authenticated backend/database to enforce it against direct storage or API access.
+
+### Workflow check
+
+1. Sign in as the administrator and edit stage durations and the higher-authority contact in Timeline Management, then save.
+2. Refresh the page and confirm the saved settings remain in place.
+3. Submit a complaint and advance its status. Each entered stage should receive a start date and deadline based on the saved duration.
+4. Open the complaint detail page as an administrator or citizen and verify the stage timeline, remaining days, status indicators, and escalation contact.
+5. For an overdue test, adjust a disposable complaint's active `stage_history` deadline in localStorage to a past date and reload its list/detail view. Confirm it is marked overdue once, records escalation history, and creates notifications.
+
+### Google login test
+
+Google login requires a real OAuth client ID. Set `VITE_GOOGLE_CLIENT_ID` in `.env`, configure `http://localhost:5173` as an authorized JavaScript origin in Google Cloud Console, and enable the `openid`, `email`, and `profile` scopes. Restart Vite after changing `.env`, open `/login`, and use the Google sign-in button. Confirm successful sign-in redirects to the dashboard. Without a configured client ID, Google login reports a configuration error; email/password login remains available.
 
 ## Future Enhancements
 

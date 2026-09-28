@@ -14,7 +14,9 @@
         "Assigned",
         "In Progress",
         "Resolved",
-        "Closed"
+        "Closed",
+        "Completed",
+        "Escalated"
       ]
     },
     "comment": {

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatComplaintStatus } from "@/api/base44Client";
 
 // Fix default marker icons for leaflet in bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -15,9 +16,16 @@ L.Icon.Default.mergeOptions({
 
 const STATUS_PIN_COLORS = {
   "Submitted": "#2563eb",
-  "Verified": "#4f46e5",
-  "Assigned": "#d97706",
+  "Under Verification": "#4f46e5",
+  "Approved Pending": "#7c3aed",
+  "Assigned to Department": "#d97706",
+  "Officer Assigned": "#d97706",
+  "Investigation in Progress": "#0ea5e9",
   "In Progress": "#ea580c",
+  "Resolution Pending": "#ec4899",
+  "Resolution Pending Verification": "#db2777",
+  "Final Review": "#64748b",
+  "Escalated": "#dc2626",
   "Resolved": "#16a34a",
   "Closed": "#64748b",
 };
@@ -74,7 +82,7 @@ export default function MapView({ problems = [], center, height = "400px", onMap
             <Marker
               key={p.id}
               position={[p.latitude, p.longitude]}
-              icon={makePinIcon(STATUS_PIN_COLORS[p.status] || "#2563eb")}
+              icon={makePinIcon(STATUS_PIN_COLORS[formatComplaintStatus(p.status)] || "#2563eb")}
             >
               <Popup>
                 <div className="min-w-[200px]">

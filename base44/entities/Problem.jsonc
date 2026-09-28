@@ -50,14 +50,111 @@
     "status": {
       "type": "string",
       "enum": [
-        "Submitted",
-        "Verified",
-        "Assigned",
-        "In Progress",
-        "Resolved",
-        "Closed"
+        "SUBMITTED",
+        "UNDER_VERIFICATION",
+        "APPROVED_PENDING",
+        "ASSIGNED_TO_DEPARTMENT",
+        "OFFICER_ASSIGNED",
+        "INVESTIGATION_IN_PROGRESS",
+        "IN_PROGRESS",
+        "RESOLUTION_PENDING",
+        "RESOLUTION_PENDING_VERIFICATION",
+        "FINAL_REVIEW",
+        "ESCALATED",
+        "RESOLVED",
+        "COMPLETED",
+        "DELAYED",
+        "REJECTED"
       ],
-      "default": "Submitted"
+      "default": "SUBMITTED"
+    },
+    "current_stage": {
+      "type": "string"
+    },
+    "submitted_at": {
+      "type": "string",
+      "description": "ISO timestamp when the complaint was submitted"
+    },
+    "current_stage_started_at": {
+      "type": "string"
+    },
+    "current_stage_deadline": {
+      "type": "string",
+      "description": "ISO timestamp deadline calculated when the complaint entered its current stage"
+    },
+    "overall_deadline": {
+      "type": "string",
+      "description": "Projected completion date based on enabled stage durations"
+    },
+    "stage_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "allowed_days": {
+            "type": "number"
+          },
+          "deadline": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deadline_status": {
+      "type": "string",
+      "description": "Deadline state for the active stage, including OVERDUE"
+    },
+    "deadline_escalated_for": {
+      "type": "string",
+      "description": "Stage and deadline key used to prevent duplicate automatic escalations"
+    },
+    "completed_at": {
+      "type": "string",
+      "description": "Timestamp when all required workflow stages were completed"
+    },
+    "archived_at": {
+      "type": "string",
+      "description": "Timestamp when the complaint was removed from the active list"
+    },
+    "pending_action": {
+      "type": "boolean",
+      "description": "Whether a blocking action remains before complaint completion"
+    },
+    "pending_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Outstanding actions that prevent complaint completion"
+    },
+    "pending_action_count": {
+      "type": "number",
+      "description": "Number of outstanding actions that prevent complaint completion"
+    },
+    "escalation_level": {
+      "type": "number",
+      "default": 0
+    },
+    "current_authority": {
+      "type": "string"
+    },
+    "previous_authority": {
+      "type": "string"
+    },
+    "escalated_at": {
+      "type": "string"
+    },
+    "escalation_reason": {
+      "type": "string"
     },
     "priority": {
       "type": "string",

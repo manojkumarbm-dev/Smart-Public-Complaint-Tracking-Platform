@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44, formatComplaintStatus } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import CitizenLayout from "@/components/CitizenLayout";
 import ProblemCard from "@/components/ProblemCard";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 export default function MyProblems() {
   const { user } = useAuth();
   const [problems, setProblems] = useState([]);
+  const [completedProblems, setCompletedProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -17,14 +18,20 @@ export default function MyProblems() {
 
   useEffect(() => {
     if (!user?.id) return;
-    base44.entities.Problem.filter({ created_by_id: user.id }, "-created_date", 200)
-      .then(setProblems)
+    Promise.all([
+      base44.entities.Problem.filter({ created_by_id: user.id }, "-created_date", 200),
+      base44.entities.Problem.completed({ created_by_id: user.id }, "-completed_at", 200),
+    ])
+      .then(([active, completed]) => {
+        setProblems(active);
+        setCompletedProblems(completed);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user?.id]);
 
   const filtered = problems.filter((p) => {
-    if (statusFilter !== "All" && p.status !== statusFilter) return false;
+    if (statusFilter !== "All" && formatComplaintStatus(p.status) !== statusFilter) return false;
     if (categoryFilter !== "All" && p.category !== categoryFilter) return false;
     if (search && !p.title.toLowerCase().includes(search.toLowerCase()) && !p.problem_id?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -42,7 +49,7 @@ export default function MyProblems() {
         </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
           <option value="All">All Statuses</option>
-          {["Submitted", "Verified", "Assigned", "In Progress", "Resolved", "Closed"].map((s) => <option key={s} value={s}>{s}</option>)}
+          {["Submitted", "Under Verification", "Approved Pending", "Assigned to Department", "Officer Assigned", "Investigation in Progress", "In Progress", "Resolution Pending", "Resolution Pending Verification", "Final Review", "Resolved", "Escalated"].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
           <option value="All">All Categories</option>
@@ -55,12 +62,24 @@ export default function MyProblems() {
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
           <ClipboardList className="text-slate-300 mx-auto mb-3" size={40} />
-          <p className="text-slate-500">No problems found matching your filters.</p>
+          <p className="text-slate-500">No active problems found matching your filters.</p>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {filtered.map((p) => <ProblemCard key={p.id} problem={p} />)}
         </div>
+      )}
+
+      {completedProblems.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900">Completed Reports</h2>
+            <span className="text-sm text-slate-500">{completedProblems.length}</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {completedProblems.map((problem) => <ProblemCard key={problem.id} problem={problem} />)}
+          </div>
+        </section>
       )}
     </CitizenLayout>
   );

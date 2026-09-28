@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44, formatComplaintStatus } from "@/api/base44Client";
 import AdminLayout from "@/components/AdminLayout";
 import ProblemCard from "@/components/ProblemCard";
 import { CATEGORIES } from "@/components/CategoryIcon";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, ClipboardList } from "lucide-react";
 
-const STATUSES = ["Submitted", "Verified", "Assigned", "In Progress", "Resolved", "Closed"];
+const STATUSES = ["Submitted", "Under Verification", "Approved Pending", "Assigned to Department", "Officer Assigned", "Investigation in Progress", "In Progress", "Resolution Pending", "Resolution Pending Verification", "Final Review", "Resolved", "Escalated"];
 
 export default function AdminProblems() {
   const [problems, setProblems] = useState([]);
@@ -24,7 +24,7 @@ export default function AdminProblems() {
   }, []);
 
   const filtered = problems.filter((p) => {
-    if (statusFilter !== "All" && p.status !== statusFilter) return false;
+    if (statusFilter !== "All" && formatComplaintStatus(p.status) !== statusFilter) return false;
     if (categoryFilter !== "All" && p.category !== categoryFilter) return false;
     if (priorityFilter !== "All" && p.priority !== priorityFilter) return false;
     if (search) {

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44, formatComplaintStatus } from "@/api/base44Client";
 import AdminLayout from "@/components/AdminLayout";
 import MapView from "@/components/MapView";
 import { CATEGORIES } from "@/components/CategoryIcon";
-import { Loader2, Crosshair, MapPin, AlertCircle } from "lucide-react";
+import { Loader2, Crosshair, MapPin } from "lucide-react";
 
-const STATUSES = ["Submitted", "Verified", "Assigned", "In Progress", "Resolved", "Closed"];
+const STATUSES = ["Submitted", "Under Verification", "Approved Pending", "Assigned to Department", "Officer Assigned", "Investigation in Progress", "In Progress", "Resolution Pending", "Resolution Pending Verification", "Final Review", "Resolved", "Escalated"];
 
 export default function AdminMap() {
   const [problems, setProblems] = useState([]);
@@ -48,7 +48,7 @@ export default function AdminMap() {
 
   const filtered = problems.filter((p) =>
     p.latitude && p.longitude &&
-    (statusFilter === "All" || p.status === statusFilter) &&
+    (statusFilter === "All" || formatComplaintStatus(p.status) === statusFilter) &&
     (categoryFilter === "All" || p.category === categoryFilter)
   );
 

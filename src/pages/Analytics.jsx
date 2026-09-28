@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { base44, canonicalComplaintStatus, formatComplaintStatus } from "@/api/base44Client";
 import AdminLayout from "@/components/AdminLayout";
 import { CATEGORIES } from "@/components/CategoryIcon";
 import { Loader2, TrendingUp, PieChart as PieIcon, BarChart3 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area
+  PieChart, Pie, Cell, Legend, AreaChart, Area
 } from "recharts";
 
 const PIE_COLORS = ["#2563eb", "#4f46e5", "#d97706", "#ea580c", "#16a34a", "#64748b", "#0891b2", "#7c3aed", "#db2777", "#65a30d"];
@@ -23,7 +23,8 @@ export default function Analytics() {
 
   const byCategory = CATEGORIES.map((c) => ({ name: c, value: problems.filter((p) => p.category === c).length }));
   const byPriority = ["Low", "Medium", "High", "Urgent"].map((p) => ({ name: p, value: problems.filter((pr) => pr.priority === p).length }));
-  const byStatus = ["Submitted", "Verified", "Assigned", "In Progress", "Resolved", "Closed"].map((s) => ({ name: s, value: problems.filter((p) => p.status === s).length }));
+  const lifecycleStatuses = ["SUBMITTED", "UNDER_VERIFICATION", "APPROVED_PENDING", "ASSIGNED_TO_DEPARTMENT", "OFFICER_ASSIGNED", "INVESTIGATION_IN_PROGRESS", "IN_PROGRESS", "RESOLUTION_PENDING", "RESOLUTION_PENDING_VERIFICATION", "FINAL_REVIEW", "ESCALATED", "RESOLVED"];
+  const byStatus = lifecycleStatuses.map((status) => ({ name: formatComplaintStatus(status), value: problems.filter((problem) => canonicalComplaintStatus(problem.status) === status).length }));
 
   // last 7 days
   const days = [];
@@ -37,7 +38,7 @@ export default function Analytics() {
     days.push({ name: d.toLocaleDateString("en", { weekday: "short" }), reports: count });
   }
 
-  const resolutionRate = problems.length ? Math.round((problems.filter((p) => ["Resolved", "Closed"].includes(p.status)).length / problems.length) * 100) : 0;
+  const resolutionRate = problems.length ? Math.round((problems.filter((p) => canonicalComplaintStatus(p.status) === "RESOLVED").length / problems.length) * 100) : 0;
 
   return (
     <AdminLayout>
@@ -60,7 +61,7 @@ export default function Analytics() {
             <div className="bg-white rounded-2xl border border-slate-200 p-5">
               <div className="text-sm text-slate-500">Open Reports</div>
               <div className="text-3xl font-bold text-amber-600 mt-1">
-                {problems.filter((p) => !["Resolved", "Closed"].includes(p.status)).length}
+                {problems.filter((p) => canonicalComplaintStatus(p.status) !== "RESOLVED").length}
               </div>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-5">

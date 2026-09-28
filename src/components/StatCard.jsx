@@ -8,6 +8,8 @@ export default function StatCard({ icon: Icon, label, value, color = "blue", sub
     amber: "bg-amber-50 text-amber-600",
     orange: "bg-orange-50 text-orange-600",
     indigo: "bg-indigo-50 text-indigo-600",
+    violet: "bg-violet-50 text-violet-600",
+    pink: "bg-pink-50 text-pink-600",
     red: "bg-red-50 text-red-600",
     slate: "bg-slate-100 text-slate-600",
   };

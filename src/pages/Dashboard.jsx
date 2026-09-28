@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { base44, canonicalComplaintStatus } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import CitizenLayout from "@/components/CitizenLayout";
 import StatCard from "@/components/StatCard";
@@ -10,21 +10,28 @@ import { PlusCircle, ClipboardList, CheckCircle2, Loader2, Activity } from "luci
 export default function Dashboard() {
   const { user } = useAuth();
   const [problems, setProblems] = useState([]);
+  const [completedProblems, setCompletedProblems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.id) return;
-    base44.entities.Problem.filter({ created_by_id: user.id }, "-created_date", 50)
-      .then(setProblems)
+    Promise.all([
+      base44.entities.Problem.filter({ created_by_id: user.id }, "-created_date", 50),
+      base44.entities.Problem.completed({ created_by_id: user.id }, "-completed_at", 50),
+    ])
+      .then(([active, completed]) => {
+        setProblems(active);
+        setCompletedProblems(completed);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user?.id]);
 
   const stats = {
-    total: problems.length,
-    pending: problems.filter((p) => ["Submitted", "Verified", "Assigned"].includes(p.status)).length,
-    inProgress: problems.filter((p) => p.status === "In Progress").length,
-    resolved: problems.filter((p) => ["Resolved", "Closed"].includes(p.status)).length,
+    total: problems.length + completedProblems.length,
+    pending: problems.filter((p) => ["SUBMITTED", "UNDER_VERIFICATION", "APPROVED_PENDING", "ASSIGNED_TO_DEPARTMENT", "OFFICER_ASSIGNMENT_PENDING", "OFFICER_ASSIGNED"].includes(canonicalComplaintStatus(p.status))).length,
+    inProgress: problems.filter((p) => ["INVESTIGATION_IN_PROGRESS", "IN_PROGRESS", "RESOLUTION_PENDING", "RESOLUTION_PENDING_VERIFICATION", "FINAL_REVIEW", "ESCALATED"].includes(canonicalComplaintStatus(p.status))).length,
+    resolved: problems.filter((p) => canonicalComplaintStatus(p.status) === "RESOLVED").length + completedProblems.length,
   };
 
   const recent = problems.slice(0, 4);
@@ -69,6 +76,18 @@ export default function Dashboard() {
         <div className="grid md:grid-cols-2 gap-4">
           {recent.map((p) => <ProblemCard key={p.id} problem={p} />)}
         </div>
+      )}
+
+      {completedProblems.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900">Completed Reports</h2>
+            <span className="text-sm text-slate-500">{completedProblems.length}</span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {completedProblems.slice(0, 4).map((problem) => <ProblemCard key={problem.id} problem={problem} />)}
+          </div>
+        </section>
       )}
     </CitizenLayout>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { base44, buildComplaintTimeline, getComplaintStatusSummary, canonicalComplaintStatus, formatComplaintStatus } from "@/api/base44Client";
 import { reverseGeocode } from "@/lib/geocode";
 import { useAuth } from "@/lib/AuthContext";
 import CitizenLayout from "@/components/CitizenLayout";
@@ -18,7 +18,21 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const STATUS_FLOW = ["Submitted", "Verified", "Assigned", "In Progress", "Resolved", "Closed"];
+const STATUS_FLOW = [
+  "Submitted",
+  "Under Verification",
+  "Approved Pending",
+  "Assigned to Department",
+  "Officer Assigned",
+  "Investigation in Progress",
+  "In Progress",
+  "Resolution Pending",
+  "Resolution Pending Verification",
+  "Final Review",
+  "Resolved",
+  "Completed",
+  "Escalated",
+];
 
 export default function ProblemDetails() {
   const { id } = useParams();
@@ -28,7 +42,9 @@ export default function ProblemDetails() {
   const isAdmin = user?.role === "admin";
   const [problem, setProblem] = useState(null);
   const [updates, setUpdates] = useState([]);
+  const [escalations, setEscalations] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [timelineSettings, setTimelineSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(searchParams.get("submitted") === "1");
   const [adminAction, setAdminAction] = useState({ status: "", comment: "", department: "", assigned_to: "", priority: "" });
@@ -44,6 +60,7 @@ export default function ProblemDetails() {
     try {
       const p = await base44.entities.Problem.get(id);
       setProblem(p);
+      base44.timelineSettings.get().then(setTimelineSettings).catch(() => {});
       if (p.latitude && p.longitude && !p.address) {
         reverseGeocode(p.latitude, p.longitude).then((a) => setResolvedAddress(a || ""));
       }
@@ -53,6 +70,8 @@ export default function ProblemDetails() {
       });
       const ups = await base44.entities.ProblemUpdate.filter({ problem_id: id }, "-created_date", 100);
       setUpdates(ups);
+      const history = await base44.entities.EscalationHistory.filter({ complaint_id: id }, "-created_date", 100);
+      setEscalations(history);
     } catch (err) {
       setProblem(null);
     } finally {
@@ -91,6 +110,8 @@ export default function ProblemDetails() {
           status: adminAction.status,
           comment: adminAction.comment || `Status updated to ${adminAction.status}`,
           image_url: resolution_image_url || "",
+          author_id: user?.id || "",
+          author_name: user?.full_name || "Administrator",
         });
       }
       // Notify the citizen
@@ -187,7 +208,24 @@ export default function ProblemDetails() {
     );
   }
 
-  const currentStep = STATUS_FLOW.indexOf(problem.status);
+  const currentStep = Math.max(0, STATUS_FLOW.indexOf(formatComplaintStatus(problem.status)));
+  const isCompleted = canonicalComplaintStatus(problem.status) === "COMPLETED";
+  const timelineData = buildComplaintTimeline(problem, timelineSettings);
+  const statusSummary = getComplaintStatusSummary(problem, timelineSettings);
+  const currentStage = timelineData.timeline.find((stage) => stage.current);
+  const hasPendingActions = Boolean(problem.pending_action)
+    || (Array.isArray(problem.pending_actions) && problem.pending_actions.length > 0)
+    || Number(problem.pending_action_count || 0) > 0;
+  const canComplete = canonicalComplaintStatus(problem.status) === "RESOLVED"
+    && timelineData.timeline.every((stage) => stage.done)
+    && !hasPendingActions;
+  const deadlineTone = statusSummary.deadlineStatus === "Overdue"
+    ? "border-red-100 bg-red-50 text-red-800"
+    : statusSummary.deadlineStatus === "Due Soon"
+      ? "border-amber-100 bg-amber-50 text-amber-800"
+      : statusSummary.deadlineStatus === "Completed"
+        ? "border-green-100 bg-green-50 text-green-800"
+        : "border-blue-100 bg-blue-50/60 text-blue-800";
 
   return (
     <Layout>
@@ -202,6 +240,22 @@ export default function ProblemDetails() {
             <p className="font-medium text-green-800">Report submitted successfully!</p>
             <p className="text-sm text-green-700">Your Problem ID is <span className="font-mono font-semibold">{problem.problem_id}</span>. Keep it to track your report.</p>
             <button onClick={() => setShowSuccess(false)} className="text-xs text-green-700 underline mt-1">Dismiss</button>
+          </div>
+        </div>
+      )}
+
+      {isCompleted && (
+        <div role="status" className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-start gap-3">
+          <CheckCircle2 className="text-green-600 mt-0.5" />
+          <p className="font-medium text-green-800">This complaint has been successfully resolved and all stages have been completed.</p>
+        </div>
+      )}
+      {!isCompleted && canonicalComplaintStatus(problem.status) === "RESOLVED" && (
+        <div role="status" className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5 flex items-start gap-3">
+          <Clock className="text-amber-700 mt-0.5" />
+          <div>
+            <p className="font-medium text-amber-900">Work is resolved; workflow completion is still pending.</p>
+            <p className="text-sm text-amber-800 mt-1">{problem.completion_validation_error || (hasPendingActions ? "Complete the remaining actions before closing this complaint." : "Every required stage must have a completed history record before closure.")}</p>
           </div>
         </div>
       )}
@@ -232,12 +286,30 @@ export default function ProblemDetails() {
                 <span>·</span>
                 <span>{format(new Date(problem.created_date), "MMM d, yyyy 'at' h:mm a")}</span>
               </div>
+              <div className={`mt-4 rounded-xl border p-3 ${deadlineTone}`}>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="font-medium">{statusSummary.deadlineStatus}</span>
+                  <span>
+                    {isCompleted
+                      ? "All workflow stages complete"
+                      : currentStage?.remainingDays === null || currentStage?.remainingDays === undefined
+                      ? "No active stage deadline"
+                      : currentStage.remainingDays < 0
+                        ? `${Math.abs(currentStage.remainingDays)} days overdue`
+                        : `${currentStage.remainingDays} days remaining`}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-blue-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${statusSummary.progressPercentage}%` }} />
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{statusSummary.warning}</p>
+              </div>
               <p className="text-slate-700 mt-4 whitespace-pre-wrap">{problem.description}</p>
 
               <div className="flex items-center gap-2 mt-5">
-                <Button variant={myConfirm ? "default" : "outline"} size="sm" onClick={handleConfirm}>
+                {!isCompleted && <Button variant={myConfirm ? "default" : "outline"} size="sm" onClick={handleConfirm}>
                   <ThumbsUp size={14} /> I face this too{confirmations.length > 0 ? ` (${confirmations.length})` : ""}
-                </Button>
+                </Button>}
                 <Button variant="outline" size="sm" onClick={handleShare}>
                   <Share2 size={14} /> {copied ? "Link copied!" : "Share"}
                 </Button>
@@ -271,18 +343,73 @@ export default function ProblemDetails() {
           {/* Timeline */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
             <h2 className="font-semibold text-slate-900 mb-4">Status Timeline</h2>
-            <div className="flex items-center justify-between mb-6">
-              {STATUS_FLOW.map((s, i) => (
-                <div key={s} className="flex-1 flex flex-col items-center relative">
-                  {i < STATUS_FLOW.length - 1 && (
-                    <div className={`absolute top-4 left-1/2 w-full h-0.5 ${i < currentStep ? "bg-green-500" : "bg-slate-200"}`} />
+            <div className="overflow-x-auto mb-6">
+              <div className="flex items-center justify-between min-w-[780px]">
+              {timelineData.timeline.map((stage, i) => (
+                <div key={stage.status} className="flex-1 flex flex-col items-center relative">
+                  {i < timelineData.timeline.length - 1 && (
+                    <div className={`absolute top-4 left-1/2 w-full h-0.5 ${stage.done ? "bg-green-500" : "bg-slate-200"}`} />
                   )}
-                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${i <= currentStep ? "bg-green-500 text-white" : "bg-slate-100 text-slate-400"}`}>
-                    {i <= currentStep ? "✓" : i + 1}
+                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${stage.done ? "bg-green-500 text-white" : "bg-slate-100 text-slate-400"}`}>
+                    {stage.done ? "✓" : i + 1}
                   </div>
-                  <span className={`text-[10px] mt-1.5 text-center ${i <= currentStep ? "text-slate-700 font-medium" : "text-slate-400"}`}>{s}</span>
+                  <span className={`text-[10px] mt-1.5 text-center ${stage.done || stage.current ? "text-slate-700 font-medium" : "text-slate-400"}`}>{stage.label}</span>
                 </div>
               ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-3 bg-slate-50 text-sm text-slate-600 mb-4">
+              <div className="flex items-center justify-between">
+                <span>Current stage</span>
+                <span className="font-medium text-slate-800">{formatComplaintStatus(problem.status)}</span>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span>Stage start</span>
+                <span className="font-medium text-slate-800">
+                  {problem.current_stage_started_at ? format(new Date(problem.current_stage_started_at), "MMM d, yyyy") : "Not recorded"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <span>Stage deadline</span>
+                <span className="font-medium text-slate-800">
+                  {problem.current_stage_deadline ? format(new Date(problem.current_stage_deadline), "MMM d, yyyy") : "Not set"}
+                </span>
+              </div>
+              {problem.overall_deadline && <div className="flex items-center justify-between mt-2">
+                <span>Projected completion</span>
+                <span className="font-medium text-slate-800">{format(new Date(problem.overall_deadline), "MMM d, yyyy")}</span>
+              </div>}
+            </div>
+
+            <div className="space-y-2 mb-5">
+              {timelineData.timeline.map((stage) => {
+                const stateStyle = stage.deadlineStatus === "Overdue"
+                  ? "bg-red-100 text-red-700"
+                  : stage.deadlineStatus === "Due Soon"
+                    ? "bg-amber-100 text-amber-800"
+                    : stage.deadlineStatus === "Completed"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-600";
+                return (
+                  <div key={stage.status} className="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-slate-100 pb-2 last:border-0">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-slate-800">{stage.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stateStyle}`}>{stage.deadlineStatus}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                        <span>Start: {stage.startedAt ? format(new Date(stage.startedAt), "MMM d, yyyy") : stage.done ? "Not recorded" : "On entry"}</span>
+                        <span>Allowed: {stage.durationDays} days</span>
+                        <span>Deadline: {stage.deadline ? format(new Date(stage.deadline), "MMM d, yyyy") : stage.enabled ? "On entry" : "Disabled"}</span>
+                      </div>
+                    </div>
+                    <span className="self-center text-xs font-medium text-slate-600 sm:text-right">
+                      {stage.deadlineStatus === "Completed" ? "Completed" : stage.remainingDays === null ? "" : stage.remainingDays < 0 ? `${Math.abs(stage.remainingDays)}d overdue` : `${stage.remainingDays}d left`}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="space-y-3">
@@ -305,7 +432,7 @@ export default function ProblemDetails() {
               ))}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-100">
+            {!isCompleted && <div className="mt-4 pt-4 border-t border-slate-100">
               <Textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -319,7 +446,7 @@ export default function ProblemDetails() {
                   Post comment
                 </Button>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -343,8 +470,48 @@ export default function ProblemDetails() {
             )}
           </div>
 
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 mb-3">Authority & Escalation</h3>
+            <div className="text-sm">
+              <p className="text-slate-500">Current authority</p>
+              <p className="font-medium text-slate-800">{problem.current_authority || "Verification Officer"}</p>
+            </div>
+            {timelineData.escalationContact && (
+              <div className="mt-3 border-t border-slate-100 pt-3 text-sm space-y-1">
+                <p className="text-xs font-medium uppercase text-slate-500">Higher authority contact</p>
+                <p className="text-slate-700">{timelineData.escalationContact.name || "Higher Authority"}</p>
+                {timelineData.escalationContact.email && <a className="block text-blue-700 hover:underline" href={`mailto:${timelineData.escalationContact.email}`}>{timelineData.escalationContact.email}</a>}
+                {timelineData.escalationContact.phone && <a className="block text-blue-700 hover:underline" href={`tel:${timelineData.escalationContact.phone}`}>{timelineData.escalationContact.phone}</a>}
+              </div>
+            )}
+            {(() => {
+              const department = departments.find((entry) => entry.name === problem.department);
+              const contact = department && [department.contact_name, department.contact_email, department.contact_phone].some(Boolean);
+              return contact ? (
+                <div className="mt-3 border-t border-slate-100 pt-3 text-sm space-y-1">
+                  <p className="text-xs font-medium uppercase text-slate-500">Department contact</p>
+                  {department.contact_name && <p className="text-slate-700">{department.contact_name}</p>}
+                  {department.contact_email && <a className="block text-blue-700 hover:underline" href={`mailto:${department.contact_email}`}>{department.contact_email}</a>}
+                  {department.contact_phone && <a className="block text-blue-700 hover:underline" href={`tel:${department.contact_phone}`}>{department.contact_phone}</a>}
+                </div>
+              ) : <p className="mt-2 text-xs text-slate-500">Department contact details are not configured.</p>;
+            })()}
+            {escalations.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-3 space-y-3">
+                <p className="text-xs font-medium uppercase text-slate-500">Escalation history</p>
+                {escalations.map((entry) => (
+                  <div key={entry.id} className="text-sm border-l-2 border-red-300 pl-3">
+                    <p className="font-medium text-slate-800">{entry.previous_authority || "Department"} to {entry.new_authority || "Higher Authority"}</p>
+                    <p className="text-xs text-slate-500">{entry.escalated_at ? format(new Date(entry.escalated_at), "MMM d, yyyy 'at' h:mm a") : "Date unavailable"}</p>
+                    {entry.reason && <p className="mt-1 text-slate-600">{entry.reason}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Admin actions */}
-          {isAdmin && (
+          {isAdmin && !isCompleted && (
             <form onSubmit={handleAdminSubmit} className="bg-white rounded-2xl border border-blue-200 p-5">
               <h3 className="font-semibold text-slate-900 mb-4">Manage Problem</h3>
               {error && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-3"><AlertCircle size={14} /> {error}</div>}
@@ -352,7 +519,7 @@ export default function ProblemDetails() {
                 <div>
                   <Label className="text-xs">Status</Label>
                   <select value={adminAction.status} onChange={(e) => setAdminAction((a) => ({ ...a, status: e.target.value }))} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-2 text-sm">
-                    {STATUS_FLOW.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {STATUS_FLOW.map((s) => <option key={s} value={s} disabled={s === "Completed" && !canComplete}>{s}</option>)}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
